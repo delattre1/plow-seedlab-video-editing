@@ -1,0 +1,10 @@
+# No secrets in this repo — instructions + var-names only.
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*credential*
+*secret*
+id_rsa*
+.DS_Store
