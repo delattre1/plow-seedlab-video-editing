@@ -91,13 +91,24 @@ reads as a stumble even with clean silence handling.
   function word* (preposition/article/conjunction — e.g. "...na questão **do.**") immediately followed by
   a restart; (2) a clause whose **leading words repeat** the next clause's opening ("é uma coisa que eu
   configure, **é uma coisa que eu** itero..."); (3) a cut-off word / self-correction.
-- **SPLICE RULE — preserve the previous valid word's tail (pad-end).** When you drop a false-start
-  fragment, do **NOT** cut at the previous word's `end` timestamp — that clips the word and the splice
-  mismatches (abrupt). Keep the previous valid word PLUS its pad-end: the out-point is
-  `prev_word.end + min(pad-end, silence_before_the_fragment)`, then resume at the next valid word's
-  `start`. This keeps the real breath after the last good word and never bleeds the dropped fragment's
-  audio in. (Real audit: cutting at `prev.end` with 0 pad produced clipped splices — fixed by preserving
-  the tail; e.g. "ajuda" kept its full 0.30 s, "configurei," kept the 0.16 s that actually existed.)
+- **SPLICE RULE — preserve the previous valid word's tail, but GUARD against the stumble onset.** When
+  you drop a false-start fragment, do **NOT** cut at the previous word's `end` (that clips the good word
+  and the splice mismatches), and do **NOT** pad all the way up to the stumble word's `start` (that bleeds
+  the **removed stumble's first word** into the output — the bug). Keep the previous good word PLUS up to
+  the pad-end, **always ending ≥ GUARD before the stumble onset**, never before the good word ends:
+  ```
+  PAD = 0.30                                   # FLOW 2 (FLOW 3 long-form = 0.35)
+  GUARD = 0.05                                 # hard buffer before the stumble's first word
+  silence_available = stumble_first_word.start - prev_good_word.end
+  pad      = max(0.0, min(PAD, silence_available - GUARD))
+  span_end = prev_good_word.end + pad          # then resume at next_good_word.start
+  ```
+  Net: the tail is up to PAD but **always ends ≥ 0.05 s before the stumble's first word starts**, so the
+  removed stumble can never leak (audio or video). **VERIFY at every false-start splice:**
+  `stumble_first_word.start - span_end ≥ GUARD` and `span_end ≥ prev_good_word.end`.
+  (Real audit on the accepted run: "ajuda" → drop "na questão do." → tail 0.27 s, lands 0.05 s before "na";
+  "configurei," → drop "é uma coisa que eu configure," → tail 0.11 s, lands 0.05 s before "é". No leak,
+  no clip. Earlier bug: padding to `stumble.start` (0-guard) leaked the stumble's first word.)
 - Do NOT over-cut: intentional rhetorical repetition / anaphora ("se você quer X… se você quer Y…") is
   NOT a false start — keep it. When unsure, surface the candidate to the boss.
 
