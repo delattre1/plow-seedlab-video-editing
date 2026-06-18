@@ -69,6 +69,49 @@ quality-review unit.
 
 ---
 
+## Cut discipline — FALSE-START removal + CONSISTENT pad-end (CEO refinement 2026-06-18)
+
+Two gold-standard requirements that apply wherever this seed does transcription-driven silence removal
+(FLOW 2 Step 7, FLOW 3 cut). The CEO caught both on a real run; fold them every time.
+
+### A) Remove FALSE STARTS (not just silence)
+Silence removal alone is NOT enough — the speaker's **false starts** (abandoned / restarted / stumbled
+sentences) MUST be cut too. A false start is content the speaker began and re-attempted; leaving it in
+reads as a stumble even with clean silence handling.
+- **This is the agent's READING step** (the same judgment as take-selection — a Claude worker reads the
+  transcript; it is NOT a pure matcher). Identify and DROP the abandoned fragment, keep the clean
+  re-attempt.
+- **Heuristic signals to flag for the agent's review:** (1) a short fragment that ends on a *dangling
+  function word* (preposition/article/conjunction — e.g. "...na questão **do.**") immediately followed by
+  a restart; (2) a clause whose **leading words repeat** the next clause's opening ("é uma coisa que eu
+  configure, **é uma coisa que eu** itero..."); (3) a cut-off word / self-correction. Drop the fragment's
+  word-span; splice the surrounding real speech with **0 pad** (clean splice, no inserted pause).
+- Do NOT over-cut: intentional rhetorical repetition / anaphora ("se você quer X… se você quer Y…") is
+  NOT a false start — keep it. When unsure, surface the candidate to the boss.
+
+### B) CONSISTENT pad-end — use a UNION pause detector, trim every pause to the configured value
+**Root cause of inconsistent pad-end (diagnosed on a real run):** relying on **Parakeet word-gaps alone**
+to find silence is unreliable — Parakeet word `end`/`start` are loose and **overrun real pauses**, so
+silences up to ~1 s survived *inside* a "contiguous" word run (and the perceived trailing pause varied
+0–1 s clip-to-clip). Relying on **acoustic silence alone** also fails when there's room-tone / background
+ambiance (a real speaker pause stays above the silence threshold). Either detector alone leaves
+inconsistent pads.
+- **THE FIX — union detector.** A pause exists between two retained words where **EITHER** the
+  transcription word-gap **OR** an acoustic `silencedetect` interval exceeds the threshold. Take the
+  **union** of both, and trim **every** detected pause down to **exactly the configured pad-end**
+  (FLOW 2 = 0.30 s; FLOW 3 long-form = 0.35 s). `pad-start = 0.0` (next phrase starts on its first word).
+  Result: NO pause anywhere in the output exceeds the pad value → consistent breathing at every cut.
+- **`silencedetect` here does NOT define speech or detect onsets** (the banned VAD/energy use — see
+  "Phase-2 NOT in scope"). The **transcription still owns content** (which words, sentences, false
+  starts). Acoustic detection is used ONLY to *place the silence trim precisely* so the pad is exact —
+  because the word timestamps are too loose to do it alone. (This refines the earlier "nothing measures
+  audio energy" note for the narrow purpose of pad-trimming; keep energy out of speech/onset definition.)
+- **Verify after render (both metrics):** run `silencedetect` on the OUTPUT and re-transcribe it — confirm
+  no pause exceeds pad + ~1 frame by *either* measure. (On the accepted run this took the max pause from
+  ~1.06 s down to ~0.49 s, median = the 0.30 s pad.)
+
+---
+
 # FLOW 1 — COMBINE (editor delivered pre-edited pieces)
 
 > Proven on the CEO-accepted runs: the **4-sample manual-body combos** and the **200-video A/B test**
