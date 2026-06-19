@@ -129,6 +129,31 @@ purely transcription-based — no acoustic.**
 - **Verify after render (transcription only):** re-transcribe the OUTPUT and confirm no inter-word gap
   exceeds pad-end by more than ~1 frame. (Do NOT verify with `silencedetect`.)
 
+### C) Remove WORD-REPETITION / STUTTER across a hesitation (e.g. "se [pause] se")
+A speaker often says a word, hesitates, then restarts with the same word ("se… se eu tiver", "toda, eu…
+eu", "IA faz… faz"). Silence-trimming the pause but keeping BOTH copies leaves an audible doubled word —
+the pad-end after the previous segment grabs the abandoned copy. Remove the **first (abandoned)** copy,
+keep the second.
+- **Two detection paths (both transcription-only):**
+  1. **Transcribed duplicates** — consecutive words whose normalized form (lowercase, strip punctuation)
+     is identical with a short gap ("que que", "a a"). Collapse to one. *Exception — do NOT collapse
+     intentional repetition*: anaphora across sentence boundaries ("comenta… Comenta sua dúvida…") or
+     fixed expressions ("tchau, tchau"). When unsure, surface to the boss.
+  2. **Hidden duplicates (the important case)** — the abandoned copy is often **NOT in the main
+     transcript** (the STT pass merges the stutter; even re-transcribing the whole output shows one copy).
+     Detect it per trimmed pause: **re-transcribe just the gap window** `[prev_word.end−0.05,
+     next_word.start+0.12]` and check whether the **next segment's first word appears EARLIER inside that
+     gap** (normalized match). A matched word ⇒ abandoned restart. (Matching the *specific* next word
+     makes this robust to short-clip hallucination — random hallucinated words won't match.)
+- **Cut with the SAME 0.10 guard:** when an abandoned copy is found at `abandoned_onset`, set the
+  previous segment's out-point to `max(prev_good_word.end, min(prev_good_word.end + pad, abandoned_onset −
+  GUARD))` (GUARD = 0.10), then resume at the real (second) word. So the abandoned copy is excluded and
+  the splice lands ≥0.10 s before it (clamped to never cut the good word; if the abandoned copy starts
+  <0.10 s after the good word, cut at the good word's end — still before the copy).
+- **Verify:** for every trimmed pause, the out-point is `< abandoned_onset`; the doubled word is gone.
+  (Real run: found 4 hidden stutters — "se", "eu", "como", "faz" — all removed; the audible "se… se" at
+  ~5 s became a single "se".)
+
 ---
 
 # FLOW 1 — COMBINE (editor delivered pre-edited pieces)
