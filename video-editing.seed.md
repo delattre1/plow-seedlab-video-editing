@@ -98,7 +98,7 @@ reads as a stumble even with clean silence handling.
   the pad-end, **always ending ≥ GUARD before the stumble onset**, never before the good word ends:
   ```
   PAD = 0.30                                   # FLOW 2 (FLOW 3 long-form = 0.35)
-  GUARD = 0.05                                 # hard buffer before the stumble's first word
+  GUARD = 0.10                                 # hard buffer before the stumble's first word (CEO: 0.05 still leaked; 0.10 clean)
   silence_available = stumble_first_word.start - prev_good_word.end
   pad      = max(0.0, min(PAD, silence_available - GUARD))
   span_end = prev_good_word.end + pad          # then resume at next_good_word.start
@@ -106,9 +106,10 @@ reads as a stumble even with clean silence handling.
   Net: the tail is up to PAD but **always ends ≥ 0.05 s before the stumble's first word starts**, so the
   removed stumble can never leak (audio or video). **VERIFY at every false-start splice:**
   `stumble_first_word.start - span_end ≥ GUARD` and `span_end ≥ prev_good_word.end`.
-  (Real audit on the accepted run: "ajuda" → drop "na questão do." → tail 0.27 s, lands 0.05 s before "na";
-  "configurei," → drop "é uma coisa que eu configure," → tail 0.11 s, lands 0.05 s before "é". No leak,
-  no clip. Earlier bug: padding to `stumble.start` (0-guard) leaked the stumble's first word.)
+  (Real audit on the accepted run, GUARD=0.10: "ajuda" → drop "na questão do." → tail 0.22 s, lands 0.10 s
+  before "na"; "configurei," → drop "é uma coisa que eu configure," → tail 0.06 s, lands 0.10 s before "é".
+  No leak, no clip. Earlier: padding to `stumble.start` (0-guard) leaked the stumble's first word, and
+  GUARD=0.05 still left an audible sliver — 0.10 is clean. If a future run still leaks, raise GUARD further.)
 - Do NOT over-cut: intentional rhetorical repetition / anaphora ("se você quer X… se você quer Y…") is
   NOT a false start — keep it. When unsure, surface the candidate to the boss.
 
