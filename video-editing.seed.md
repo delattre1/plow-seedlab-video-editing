@@ -69,6 +69,15 @@ quality-review unit.
 
 ---
 
+## SOURCE-RESOLUTION DISCIPLINE — edit from the FULL ORIGINAL, set resolution only at export (CEO 2026-06-20)
+**ALWAYS edit from the full original source resolution end-to-end. NEVER introduce a downscaled intermediate.** All cutting, camera switching, crop, and zoom operate on the **full original footage** (these cameras are native **4K 3840×2160**) — the ONLY place resolution is set is the **final export step**.
+- A 1080p (or any downscaled) working slice is **WRONG as a default** — it throws away quality and corrupts crop/zoom (upscaling soft pixels). Do not create one.
+- **For crop/zoom this is mandatory:** crop from the full 4K and scale to the delivery size at the final render → sharp. Cropping a 1080p slice upscales/softens.
+- **Final export defaults to FULL QUALITY (4K).** If a smaller deliverable is ever wanted, **downscale ONLY at that final export**, never upstream.
+- **Render directly from the originals** (e.g. `ffmpeg -ss <camA_start> -i CAMA -ss <camB_start> -i CAMB -filter_complex <trims/crops at slice-time> … scale=<export> …`) so there is **no re-encoded intermediate** — one encode generation, full quality.
+
+---
+
 ## Cut discipline — FALSE-START removal + CONSISTENT pad-end (CEO refinement 2026-06-18)
 
 Two gold-standard requirements that apply wherever this seed does transcription-driven silence removal
