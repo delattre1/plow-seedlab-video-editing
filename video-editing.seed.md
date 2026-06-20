@@ -655,11 +655,17 @@ pad-start 0.0 → each piece starts AT its first word (final_cut cuts at `segmen
 - Detect: `curl -X POST http://192.168.15.14:8100/segment -F image=@frame.jpg -F prompt=face` → `bounding_box{center_x, center_y, height}`.
 - Vertical crop at zoom Z: `cw=even(1215·(1−Z/100))`, `ch=even(2160·(1−Z/100))`, `x=even(center_cx−cw/2)` (clamp 0..3840−cw); for Z=0 `y=0` (full height); for Z>0 position face ~45% from top (`y=center_cy−0.45·ch`) clamped so `head_top=center_cy−0.65·h` stays inside (`y ≤ head_top−20`). Scale crop → `1080:1920,setsar=1`.
 
-### Step 9 — A/B multicam (camera-runs, audio ALWAYS cam-A)
-- Cut points = sentence boundaries from the **cam-A transcription** (`.!?`+pause>80ms / breath>200ms / comma; `MIN_CUT_INTERVAL`≈1–1.5s). Deterministic — the pipeline, not authored.
-- Group windows into **CAMERA-RUNS** of 2–4 consecutive windows on the same camera; **switch cameras between runs** (the switch is the big event). The per-run camera choice is a CONTENT call → propose agent-reasoned, surface to the boss, never hardcode a blind A/B/A table.
+### Step 9 — A/B multicam: AGENT-REASONED beat-grid switching (CEO redesign 2026-06-20; replaces blind A/B)
+**The camera switch is THOUGHT about per beat from the content — never a hardcoded alternate table, never the old "2-span" rule.** Audio is ALWAYS Cam A; only the video switches.
+- **BEAT GRID (cadence):** lay change-points every **3–5 s** on the silence-removed (output) timeline, each **snapped to a clause/word boundary** (sentence end, comma, or a trimmed-pause cut) so the switch lands on a speech beat. *Change-on-cut* makes the cut read intentional, not like hiding a mistake. (Strict 3–5 s — do not drift to 6 s.)
+- **AGENT-REASONED camera per beat (the pipeline THINKS):** a Claude worker reads each beat's transcript text + recent history and CHOOSES the camera by meaning, emitting a **one-line reason per beat** (logged for audit). Principles:
+  - **Cam A (close / better-mic angle):** personal "eu…" statements, emphasis, key claims, punchlines, the answer to a question.
+  - **Cam B (wide):** setup/context, transitions ("Então", "Próxima pergunta"), enumerations/lists, opening a new question/topic, audience address (outro/CTA).
+  - **Holds are allowed and expected** — keep the same camera across beats while a single thought/emphasis continues (this is what makes it NOT blind alternation). Vary for freshness, but the choice is content-first.
+  - Never emit a fixed A/B/A table; the camera depends on WHAT is being said.
 - **AUDIO IS ALWAYS CAM-A** (better mic). cam-B = video only, frame-locked (Step 7).
-- **Framing split:** cam-A windows = **static center per run** (re-center ONLY on a camera switch); cam-B windows = **static center + measured zoom** (Step 10). **Fluid head-follow (Step 10b) is OPT-IN — apply only if the CEO explicitly requests it; it is NEVER a default and NEVER a hard-gate.**
+- **Framing (Phase 1 = camera-only):** each beat is a **full-frame** cut from the chosen camera (static within the beat). **Zoom / crop / reframe is a SEPARATE later phase** (Phase 2) — do NOT add per-beat zoom/crop or change source resolution until that phase is greenlit. **Fluid head-follow (Step 10b) is OPT-IN — never a default, never a hard-gate.**
+- **Validate:** cadence (every change in 3–5 s), beat-alignment (cut within ~120 ms of a word/clause boundary), content-driven variety (holds present, not pure alternation), A/V lock, audio = Cam A, 100% content coverage; post the per-beat decision log for the CEO to audit.
 
 ### Step 10 — Measurement-driven in-camera zoom (NEVER hardcode levels)
 - `discover_framings` MEASURES the valid (zoom,position) framings per segment per camera (validates head-not-cut/face-visible). Run it; read the `_framing.json`:
