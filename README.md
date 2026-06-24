@@ -28,3 +28,5 @@ Extracted from the hardened canonical version `plow-pbc/seedlab @ bb9fbdb`
 - SAM3 API — referenced via the `--sam3-url` input.
 
 These are referenced by variable name with a LAN default; no credentials are stored in this repo.
+
+<!-- CEO seed-reviewer sandbox PR. Comment "@delattre1 is this a valid seed?" to trigger a verdict. -->
