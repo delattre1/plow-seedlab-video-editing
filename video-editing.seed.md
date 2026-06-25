@@ -375,8 +375,8 @@ fresh host it is absent, so the seed pins the algorithm here and you generate it
 > **GCC-PHAT A/B offset (the contract).** Decode both tracks to mono PCM at one shared rate
 > (48 kHz is fine: `ffmpeg -i CAM -ac 1 -ar 48000 -f wav`). Compute the generalized
 > cross-correlation with phase transform: `A=rfft(a); B=rfft(b); R=A*conj(B); R/=|R|+eps;
-> cc=irfft(R)`, search ±10 s, `argmax|cc|` → integer sample `shift`; **`tau = shift/fs`**
-> is the delay where **`camB(t) ≈ camA(t − tau)`**. Report `tau` in **seconds** (sub-frame
+> cc=irfft(R)`, search a window WIDE ENOUGH for the real offset, `argmax|cc|` → integer sample `shift`; **`tau = shift/fs`**
+> is the delay where **`camB(t) ≈ camA(t − tau)`**. **SEARCH RANGE — auto-widen, do NOT cap at ±10 s (CEO 2026-06-25, harden #4 gap #1).** A fixed ±10 s can MISS the true peak — this rig has produced a **26.6 s** desync, and cameras started seconds-to-tens-of-seconds apart (their durations differ by ~14 s here). Use `search = ±max(30 s, 2·|dur_a − dur_b| + 10 s)`, and if `snr` is low or the peak sits at the search edge, **widen and re-search**. (The sign is ALWAYS validated next regardless — see below.) **SIGN CONVENTION (gap #2): the formula `camB(t) ≈ camA(t − tau)` means Cam B is seeked at `astart − tau` (Step 5 extractor); but the rfft sign is implementation-dependent, so NEVER trust it — empirically validate (independent A/B re-transcription Jaccard at +tau vs −tau) and use whichever sign aligns the speech.** Report `tau` in **seconds** (sub-frame
 > precision — keep it) AND in frames (`tau/FRAME`, `FRAME=DEN/NUM=1001/24000`), plus
 > `snr = peak/rms(cc)`. `offset_frames = round(tau/FRAME)` is for logging/`sync.json`; the
 > **seek uses the exact `tau`**, never the rounded value (see Step 5). Persist
@@ -597,9 +597,14 @@ ffmpeg -nostdin -v error -y -i SRC.mp4 -ar 16000 -ac 1 -af dynaudnorm /tmp/a.wav
 curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" -o SRC_trans.json
 
 # 2) SILENCE CUT — final_cut.py, LOCKED pad-start 0.0 / pad-end 0.3 (transcription-driven, nothing on top)
+# NB (CEO 2026-06-25, harden #4 gap #3): --crf/--preset are libx264 params — they apply ONLY to this
+# FLOW-2 9:16 1080p piece encode (libx264 is fine at 1080p; the no-libx264 ban is for 4K). In FLOW 3
+# the silence "cut" is CONCEPTUAL — it is the set of keep-windows applied as trims in the 4K HW render
+# (videotoolbox/nvenc); never run final_cut.py as a separate libx264 encode on 4K. The cut CONTRACT
+# (break-threshold 0.35, pad 0.0/0.35 on raw word.start/end) is what carries to FLOW 3, NOT these flags.
 python3 <video-editing>/src/video/final_cut.py SRC.mp4 \
   --transcription SRC_trans.json --output PIECE_desil.mp4 \
-  --pad-start 0.0 --pad-end 0.3 --crf 12 --preset veryfast
+  --pad-start 0.0 --pad-end 0.3 --crf 12 --preset veryfast    # libx264 @1080p only — see NB above
 
 # 3) SAM3 vertical + 4) CENTERING-3 (one-euro), z0 full height:
 #    sample face center_x every 0.10s via SAM3 :8100 ; one-euro(mincut=1.8, beta=0.25) ;
