@@ -876,7 +876,7 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" \
    per segment per camera (validates head-not-cut). Read each `_framing.json`. **Pick zoom levels ONLY
    from the measured set** — never hardcode (hardcoded levels cut his head).
 6. **Content-aware EDL** (`multicam-edit-v2`): build the edit from the Cam-A transcript + the framing
-   JSONs (see "The editing rules" below). Output is **landscape 3840×2160**, **per-run crops** (the crop is CONSTANT within each camera-run — same `crop_x` & `crop_w` for all its windows; see the static-X rule), audio
+   JSONs (see "The editing rules" below). Output is **landscape 3840×2160**, **per-window crops**, audio
    always Cam A.
 7. **Render + concat** (`scripts/multicam_render_v2.py`, on **mac-pro**): per-segment ProRes, **pad audio
    per segment**, then **concat directly to H.264** (`-b:v 40M`). Hardware DECODE *and* ENCODE.
@@ -995,7 +995,8 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
   looks flat/epileptic; "fixing" the split by re-running the EDL to force 50/50 re-cuts against the
   speech and destroys the build→switch rhythm. A balance skew is a **warning, not an error** — leave it.
 
-- **(7) Landscape crop is STATIC per RUN — the SAME one rectangle for every window in a camera-run, no pan.** Each window in a run renders the **identical** crop rectangle (same `crop_x` AND `crop_w` = the run's static-X nudge + the run's stable zoom); the rectangle is chosen ONCE per run and changes only at a run boundary (camera switch / deliberate zoom step). **No** per-frame pan / head-follow AND **no per-window X re-center** in landscape
+- **(7) Landscape crop is STATIC per shot — one rectangle per window, no pan.** Each window = one fixed
+  crop rectangle at the run's zoom, `scale=1920:1080`. **No** per-frame pan / head-follow in landscape
   (that is the FLOW-2 vertical technique). **The error it avoids:** an automatic pan in a landscape
   close-up **creeps/jitters** to re-centre mid-take (the CEO rejects it); the crop is chosen ONCE from the
   SAM3 box for the whole window and **steps only at the next speech boundary**.
