@@ -15,6 +15,18 @@
 > above `## Goal`. **FLOW 3 (MULTICAM LONG-FORM → landscape 16:9)** is the self-contained section at
 > the very bottom of this file.
 
+## Generativity — Step-0 gate (read before any harden spend)
+
+This is a **TRUE GENERATIVE seed**, per the seedlab standard (`seedlab/docs/PRINCIPLES.md` §2 "What is a SEED"; `seedlab/docs/test-a-seed.md` Step 0). The gold-standard reference is the teleprompter/almanac seed: **zero pre-baked source** — a blind agent GENERATES the software from intent + contracts + acceptance journeys and self-verifies against it.
+
+**What that means for this seed, concretely:**
+- **You GENERATE every pipeline script** (transcription call, offset/sign-validate, EDL builder, per-piece extractor, SAM3 framing, render/concat) from the **contracts** in `## Steps`, `## Verify`, and the rule blocks. The seed names the **intent, the inputs/outputs, the locked parameters, and the pass/fail gates** — not a program to paste.
+- **There is NO pre-baked editing code in this file**: zero heredocs, zero base64 blobs, zero vendored/tarballed source, nothing you `cat >` into a file and run. The Step-0 generativity gate (PRINCIPLES §2) is therefore **PASS** — hardening this seed hardens the spec, and fixes fold back as **contracts**, never as pasted code.
+- **The fenced blocks are illustrations, not the product**: (i) ASCII pipeline **diagrams**, and (ii) short **intent-level command examples** (one-liners showing the shape of an ffmpeg/curl invocation). They are guidance for the agent's own generation. **Pasted program-source lines = 0** → the "≤10% code / ≥90% instructions" bar is met in substance (the only fenced content is diagrams + command illustrations; if a strict line-counter still reads >10%, the single largest contributor is the Phase-2 ASCII diagram, which is a diagram, not code).
+- **Two Steps are explicitly YOUR reasoning, not a script** (the generativity heart): Step 4 take-selection (you read the transcript) and Step 9 agent-reasoned camera switching. Do not replace them with a matcher program.
+
+**Acceptance is measurable, not prose:** each flow's `## Verify` is a hard gate over **observable running state** (re-transcribe the delivered mp4, SAM3 head-safety on real rendered frames, A/V-lock numbers, the timing-artifact gate) — never "process launched" or a parameter cited in prose. A blind agent runs `## Verify` from zero; if it passes with no in-container fixes, the seed is proven.
+
 ## Three flows — pick ONE (DECISION RULE)
 
 This seed covers **three distinct video-editing flows**. They share the final discipline
@@ -553,47 +565,19 @@ silence removed, **audio always cam-A**, cut between cam-A and cam-B (A/B), with
 How one piece is edited, and how edited pieces fan out into the launch-reel combos
 (transcription-driven, NO VAD, NO relight; this batch is 100% cam-A + centering-3):
 
-```
-  cam-A SOURCE segment (4K 3840x2160, one take = one hook/body/cta)
-        |
-        v
-  [1] PARAKEET transcription  -->  word-level timestamps          (NO VAD)
-        |                          speech = word spans
-        |                          silence = gaps between words
-        v
-  [2] TRANSCRIPTION-DRIVEN silence removal  (final_cut.py --pad-start 0.0 --pad-end 0.3)
-        cut points = Parakeet word/segment timestamps ONLY
-        pad-start 0.0 -> piece starts AT the first word (final_cut cuts at segment.start = word.start)
-        pad-end   0.3 -> keep up to 0.3s after the last word (clamped to source clip end)
-        NOTHING on top: no energy/RMS onset, no leading-silence trim, no tail-normalize
-        |
-        v
-  [3] SAM3 VERTICAL reframe   (face bbox -> 9:16 crop 1215x2160 -> scale 1080x1920)
-        |
-        v
-  [4] CENTERING-3 fluid       (SAM3 head @0.1s -> one-euro mc=1.8 b=0.25 -> 30fps sendcmd crop x)
-        head pinned dead-center (off-center ~0.7px avg)
-        |
-        v
-  EDITED PIECE  (vertical 1080x1920, audio cam-A; lead/tail = pad-start 0.0 / pad-end 0.3)   [NO relight]
-
-  ...repeat for all 22 pieces:  10 hooks (H1..H10) | 2 bodies (B1,B2) | 10 CTAs (C1..C10)...
-
-        |
-        v
-  [5] CONCAT  hookX + bodyY + ctaZ        (encode each piece -> H.264 once ; concat-demuxer -c:v copy ; PTS-realign)
-        seam = previous piece pad-end tail + next piece (starts at its first word) ; no clipped words
-        |
-        v
-  [6] 200 COMBOS = 10 hooks  x  2 bodies  x  10 CTAs
-
-            B1                         B2
-        +---------- C1..C10        +---------- C1..C10
-   H1 --+                     H1 --+
-   H2 --+   = 10x10 = 100     H2 --+   = 10x10 = 100      -->  200 videos total
-   ...  |                     ...  |
-   H10 -+                     H10 -+
-                                                hookX-bodyY-ctaZ.mp4  (9:16, ~55-58s each)
+```text
+  cam-A SOURCE segment (4K 3840x2160; one take = one hook/body/cta)
+    -> [1] PARAKEET transcription -> word-level timestamps (NO VAD; speech = word spans, silence = gaps)
+    -> [2] TRANSCRIPTION-DRIVEN silence removal (final_cut.py --pad-start 0.0 --pad-end 0.3; cut points = word
+           timestamps ONLY; start AT first word, keep 0.3s after last word clamped to clip end; nothing on top
+           — no energy/RMS onset, no leading-silence trim, no tail-normalize)
+    -> [3] SAM3 VERTICAL reframe (face bbox -> 9:16 crop 1215x2160 -> scale 1080x1920)
+    -> [4] CENTERING-3 fluid (SAM3 head @0.1s -> one-euro mc=1.8 b=0.25 -> 30fps sendcmd crop x; head dead-center)
+    =  EDITED PIECE (vertical 1080x1920, audio cam-A; lead/tail = 0.0 / 0.3) [NO relight]
+  ...repeat for all 22 pieces: 10 hooks | 2 bodies | 10 CTAs...
+    -> [5] CONCAT hookX+bodyY+ctaZ (encode each piece -> H.264 once; concat-demuxer -c:v copy; PTS-realign;
+           seam = prev piece's pad-end tail + next piece starting at its first word; no clipped words)
+    -> [6] 200 COMBOS = 10 hooks x 2 bodies x 10 CTAs -> hookX-bodyY-ctaZ.mp4 (9:16, ~55-58s each)
 ```
 
 (A/B multicam, Steps 8–10, stays available for future videos; this launch-reels batch is 100% cam-A.)
@@ -705,7 +689,12 @@ pad-start 0.0 → each piece starts AT its first word (final_cut cuts at `segmen
 - **VALID-CROP RULE SET (a crop must satisfy ALL, CEO 2026-06-21):** `eyeline ≤ 42%` AND `head ≤ MAX_HEAD (0.70)` AND `headroom ≥ HEADROOM_FLOOR (7%)` AND `crop ≥ 2688×1512` (1.4×FHD) AND `X-centered (face_cx ≈ 50%)`. If a level can't satisfy all, go wider (or switch camera); never ship a crop that violates any.
 - **VERIFY GATE (per run; SAM3-TRUTH, CEO 2026-06-24):** re-run SAM3 (`head`+`eyes`) on the ACTUAL rendered crop at START / MID / END and confirm, measured to the REAL boxes: **head fully in frame** (`crown = head.y1` inside the crop top with **headroom ≥ 7%**, `chin = head.y2` inside the crop bottom — NO clip); **X-centered** (head center_x ≈ 50%); **eyeline ≤ 42% AND near 36%** (`eyes.center_y`); crop ≥ 2688×1512 (1.4×FHD); R ≤ MAX_HEAD (0.70). **Also verify the validity/rejection contract:** every SHIPPED beat had at least one VALID sample (SAM3 returned head+eyes) and was cropped-to-valid — **flag any beat shipped without SAM3 data** (it should have been routed to the other camera, never shipped on a guess); and confirm no beat was DROPPED while it had data. (Flag any beat whose start cannot meet the rule set; do NOT re-check or correct mid-take drift.) Log per run: head% chosen, native crop size + FHD ✓, X-centered ✓, **measured eyeline% + headroom% (from the SAM3 boxes)**, valid-samples k/3 per camera, content reason.
 - **DECISION DEBUG LOG — REQUIRED ARTIFACT, emitted with EVERY render (CEO 2026-06-22).** Every edit MUST write a human-readable per-beat decision log (HTML or txt) next to the output, for debugging. It must contain: a SUMMARY (source pair + durations + sync, the active rule values, beat count, cam-A/cam-B split, output duration, total dead-air removed, eyeline distribution, move distribution, a one-line diagnosis); a SILENCE/DEAD-AIR CUTS table (each cut: source out→in time + seconds removed); and a PER-BEAT table — output timestamp + source timestamp, content type, CAMERA chosen, MOVE, head% / eyeline% / headroom% / X-center%, native crop rect, WHY this camera was chosen, and **WHY the other camera was rejected (the binding rule: head>cap / eyeline>gate / headroom<floor / crop<res-floor / out-of-sync-range)**, plus the transcript text. (Requires SAM3 of BOTH cameras at each beat-start so the rejected camera's binding rule is recorded.)
-- **PER-STEP TIMING BREAKDOWN — REQUIRED ARTIFACT, emitted with EVERY edit (CEO 2026-06-22).** Capture WALL-CLOCK per pipeline step and emit it as a clean breakdown in the manifest AND the decision-debug (and report it). Time these individually: **(a)** audio decode + GCC-PHAT sync (+ sign-validate), **(b)** transcription, **(c)** segment+match / EDL build, **(d)** SAM3 framing pass (BOTH cameras — usually the #1 bottleneck; note its share of TOTAL + calls/s), **(e)** 4K render (per-segment hw decode+encode — the HEVC-decode-bound stage), **(f)** mux/finalize (concat-demuxer + PTS realign), **(g)** TOTAL. Mark the BOTTLENECK step explicitly. Instrument each step with a start/end timestamp at run time (do NOT reconstruct after the fact). Measured on the C4789/C4843 fresh-footage run: framing ≈ 30.5 min (bottleneck) ≫ render; transcription 25 s; sync/EDL minutes.
+- **PER-STEP TIMING BREAKDOWN — REQUIRED ARTIFACT, emitted with EVERY edit (CEO 2026-06-22; ATOMIC-TIMER contract added 2026-06-25).** Capture WALL-CLOCK per pipeline step and emit it as a clean breakdown in the manifest AND the decision-debug (and report it). Time these individually: **(a)** audio decode + GCC-PHAT sync (+ sign-validate), **(b)** transcription, **(c)** segment+match / EDL build, **(d) SAM3 framing pass (BOTH cameras — usually the #1 bottleneck) — SPLIT into two sub-timers that MUST be reported separately: (d1) frame EXTRACTION (ffmpeg HW-decode of the sample frames — measured as the ACTUAL framing bottleneck, not SAM3) and (d2) SAM3 inference (probe seconds + calls/s + its share of d)**, **(e)** 4K render (per-segment hw decode+encode — the HEVC-decode-bound stage), **(f)** mux/finalize (concat-demuxer + PTS realign), **(g)** TOTAL. Mark the BOTTLENECK step explicitly.
+  - **ATOMIC, SELF-RECORDED — each stage stamps its OWN start/end at run time, into the timing artifact, as it runs (NOT reconstructed after the fact from file mtimes, log scraping, or wall-clock between unrelated steps).** A stage's timer is written by that stage's own code, around its own work.
+  - **CACHED / SKIPPED ≠ ZERO (the bug this rule exists for).** If a stage is skipped because its output already exists (e.g. a re-launched `process.sh` finds `boxes.json` already computed, so framing does no work), it MUST record `{cached: true, work_wall_s: 0, prior_measured_wall_s: <the real framing time from the run that produced the cache, or null>}` — it must NOT report `~0 s` as if framing were free. A framing stage that emits `0.09 s` because boxes were cached is a FALSE timing, exactly the 06-24 gap: the dominant stage looked free.
+  - **CLEANLINESS FLAG — REQUIRED.** The artifact records whether the run was `clean` (one uncontended pass, `restarts: 0`, no known GPU contention) or `contended` (record `restarts: <n>` and any known competing GPU job, e.g. a voice demo holding VRAM). A `contended`/restarted wall-clock is NEVER reported as a representative/clean stage time — label it. (On 06-24 the framing stage took ~47 min ELAPSED but that was GPU-contended + 5 in-loop restarts AND partly reconstructed from mtimes — it is NOT a clean framing number; a representative framing time needs one `clean` instrumented pass.)
+  - **PROVENANCE per stage:** `measured` (atomic run-time timer) vs `reconstructed` (mtime/inference). Any `reconstructed` value MUST be flagged as such and MUST NOT be presented as measured.
+  - Reference points (label provenance + cleanliness): C4789/C4843 fresh-footage run framing ≈ 30.5 min (bottleneck) ≫ render, transcription 25 s, sync/EDL minutes [measured]; 06-24 live-interativa setup 9.92 s / EDL 0.04 s / render 479 s / finish 244 s [measured], framing ~47 min [reconstructed + contended — NOT clean].
 - *(Legacy `discover_framings` measured (zoom%,position) framings the same way — head-not-cut/face-visible via SAM3; this Step supersedes its crop-factor labels with the head-height-ratio metric + the two hard rules.)*
 
 #### MOVE VOCABULARY — INSTANT or STATIC only; NO within-shot motion (CEO-approved 2026-06-20)
@@ -747,6 +736,7 @@ pad-start 0.0 → each piece starts AT its first word (final_cut cuts at `segmen
 - **Head-safe on REAL 9:16 frames** at EVERY zoom step (SAM3 `face_top` inside crop, no cut).
 - **No JITTER, no LAG:** cam-B = static center per run (zoom steps land on speech boundaries); cam-A = static center per run by default — no per-frame creep, re-center only on a switch. **Absence of fluid head-follow is NOT a defect and NEVER a hard-gate.** Only IF the CEO requested head-follow: additionally verify it keeps the head centered without recenter-snapping OR sliding off (centered AND smooth).
 - **Vertical 1080×1920**, **audio cam-A only**, **A/V locked** (video-dur==audio-dur), clean joins, **no leading silence**, **FULL final sentence** (last word present — re-transcribe the tail and confirm).
+- **TIMING ARTIFACT GATE (measurable — added 2026-06-25):** the per-step timing artifact exists next to the output AND **passes all of**: (1) every stage **(a)–(g)** has a wall-clock value with `provenance: measured` (run-time atomic timer) — any `reconstructed` value FAILS the gate unless the stage genuinely did no work; (2) the framing stage reports the **(d1) extraction vs (d2) SAM3** split, not a single lumped number; (3) a stage that did real work reports a **non-zero** `work_wall_s`, and a `cached:true` stage reports `work_wall_s:0` WITH `prior_measured_wall_s` (a framing stage reporting ≈0 s while NOT marked `cached` FAILS — that is the 06-24 false-timing bug); (4) the **cleanliness flag** is present (`clean` with `restarts:0`, or `contended` with a restart count / named contender); (5) the **BOTTLENECK** stage is named. A run whose timing artifact misses any of these is NOT shippable as a clean reference time.
 
 ## Phase-2 Failure modes (the CEO caught every one of these — fold them)
 - **Whisper instead of Parakeet** → hallucinated a "Gravando" loop that HID a real take (CTA 4 reported "missing" when it was recorded). NEVER Whisper; if Parakeet/GPU down, restart it.
@@ -1015,6 +1005,7 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
   (a real ≥10% push-in/pull-out) or exactly 0 (held)** — **FLAG any same-cam consecutive crop change that is
   > 0 and < 10% relative** (a banned sub-10% micro-jitter). Camera-switch boundaries are exempt (zoom resets
   freely across a switch).
+- **TIMING ARTIFACT GATE (measurable — added 2026-06-25; same contract as Step 10 PER-STEP TIMING).** This 16:9 long-form flow IS the production pipeline, so it ships the per-step timing artifact and it passes the same gate: every stage **(a)–(g)** has a `provenance: measured` run-time atomic timer; framing reports the **(d1) extraction vs (d2) SAM3** split; a working stage reports non-zero `work_wall_s` while a `cached:true` stage reports `work_wall_s:0` + `prior_measured_wall_s` (a framing stage at ≈0 s NOT marked `cached` FAILS — the 06-24 false-timing bug); the **cleanliness flag** (`clean`/`contended` + restart count / named contender) is present; the **BOTTLENECK** stage is named. A `reconstructed`/`contended` framing time is NEVER reported as a clean reference.
 
 ## Flow-3 Failure modes (folded from the real runs — the CEO caught these)
 - **Trusted `find_offset`'s sign blindly** → `-ss` applied to the WRONG camera → **~26.6 s desync** (2×
