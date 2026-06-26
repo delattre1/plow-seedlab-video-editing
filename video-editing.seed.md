@@ -48,11 +48,12 @@ editor's work). **FLOW 2 vs FLOW 3 is decided by the deliverable's orientation/l
 reel → FLOW 2; 16:9 long-form → FLOW 3.
 
 > `final_cut.py` parameters are CEO-decided **per deliverable** — never substitute your own; if a value
-> seems wrong, RAISE it to the CEO (that is how FLOW 3 went 0.30 → 0.35). **FLOW 2 (short vertical):
-> `--pad-start 0.0 --pad-end 0.3`. FLOW 3 (long landscape): `--pad-start 0.0 --pad-end 0.35`, break
-> threshold `0.35`** (CEO-raised on the accepted long-form run — 0.30 broke natural sentence pauses; see
-> FLOW 3). **`no VAD`** = no editing-client energy/RMS VAD, in EITHER flow. (In FLOW 1 `final_cut` does
-> not run.)
+> seems wrong, RAISE it to the CEO. **ABSOLUTE RULE (CEO 2026-06-26, not to be changed): `pad-start = 0`
+> and `pad-end = 0.3` for EVERY cut we apply — both flows.** **FLOW 2 (short vertical):
+> `--pad-start 0.0 --pad-end 0.3`. FLOW 3 (long landscape): `--pad-start 0.0 --pad-end 0.3`, break
+> threshold `0.35`** (an earlier long-form run experimented with pad-end 0.35; the CEO reasserted the
+> absolute 0.3 — pad-end is 0.3, period; **break is unchanged at 0.35**). **`no VAD`** = no editing-client
+> energy/RMS VAD, in EITHER flow. (In FLOW 1 `final_cut` does not run.)
 >
 > **"no VAD" bans the EDITING CLIENT's energy/RMS VAD — NOT the STT server's internal VAD.** Speech and
 > cut points are defined ONLY by the transcription (the source-of-truth), never by client-side audio
@@ -119,7 +120,7 @@ reads as a stumble even with clean silence handling.
   the **removed stumble's first word** into the output — the bug). Keep the previous good word PLUS up to
   the pad-end, **always ending ≥ GUARD before the stumble onset**, never before the good word ends:
   ```
-  PAD = 0.30                                   # FLOW 2 (FLOW 3 long-form = 0.35)
+  PAD = 0.30                                   # FLOW 2 = 0.30 ; FLOW 3 long-form = 0.30 (ABSOLUTE RULE pad-end 0.3)
   GUARD = 0.10                                 # hard buffer before the stumble's first word (CEO: 0.05 still leaked; 0.10 clean)
   silence_available = stumble_first_word.start - prev_good_word.end
   pad      = max(0.0, min(PAD, silence_available - GUARD))
@@ -141,7 +142,8 @@ normalize the trailing pause uniformly, so phrase-ends varied (some clipped, som
 purely transcription-based — no acoustic.**
 - **Method:** walk the retained words (after false-start removal). For every consecutive pair, compute
   `gap = next.start − prev.end`. Wherever `gap > pad-end`, trim the gap down to **exactly the configured
-  pad-end** (FLOW 2 = 0.30 s; FLOW 3 long-form = 0.35 s) — i.e. keep `prev.end + pad-end`, then jump to
+  pad-end** (FLOW 2 = 0.30 s; FLOW 3 long-form = 0.30 s — ABSOLUTE RULE pad-end 0.3 every cut, CEO 2026-06-26)
+  — i.e. keep `prev.end + pad-end`, then jump to
   `next.start`. `pad-start = 0.0`. Gaps `≤ pad-end` are natural intra-phrase rhythm — leave them.
 - **Result by construction:** every phrase boundary in the output has *exactly* the pad-end, and no gap
   anywhere exceeds it — consistent breathing at every cut, derived 100 % from the transcription.
@@ -601,7 +603,7 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" -o S
 # FLOW-2 9:16 1080p piece encode (libx264 is fine at 1080p; the no-libx264 ban is for 4K). In FLOW 3
 # the silence "cut" is CONCEPTUAL — it is the set of keep-windows applied as trims in the 4K HW render
 # (videotoolbox/nvenc); never run final_cut.py as a separate libx264 encode on 4K. The cut CONTRACT
-# (break-threshold 0.35, pad 0.0/0.35 on raw word.start/end) is what carries to FLOW 3, NOT these flags.
+# (break-threshold 0.35, pad 0.0/0.3 on raw word.start/end — ABSOLUTE RULE pad-end 0.3) is what carries to FLOW 3, NOT these flags.
 python3 <video-editing>/src/video/final_cut.py SRC.mp4 \
   --transcription SRC_trans.json --output PIECE_desil.mp4 \
   --pad-start 0.0 --pad-end 0.3 --crf 12 --preset veryfast    # libx264 @1080p only — see NB above
@@ -866,13 +868,13 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" \
      **RAW `word.start`/`word.end`** AS-IS → `final_cut.mp4`. **This is the cut that ships.** The
      rough+fine rule, nothing on top: **break a segment when the inter-word gap `next.start − cur.end`
      exceeds the threshold; keep `[first.start, last.end + pad-end]`; drop the inter-segment pauses.**
-     LOCKED long-form values **`--pad-start 0.0 --pad-end 0.35`**, break **threshold 0.35 s**. **Both
-     raised from 0.30** on the CEO-accepted long-form run: at 0.30 the break fired on natural
-     sentence-internal micro-pauses (e.g. `'com vocês,'` end 55.68 → `'Dani'` start 56.00 = a 0.32 s gap
-     got cut mid-thought), and a 0.30 tail clipped the final consonant's release. **No `eff_end` cap, no
-     onset trim, no silencedetect** — every hack added here came back as an audible artifact. (If a
-     value seems wrong, RAISE it to the CEO — that is exactly how 0.30 → 0.35 happened — never substitute
-     a heuristic.)
+     LOCKED long-form values **`--pad-start 0.0 --pad-end 0.3`**, break **threshold 0.35 s**.
+     **ABSOLUTE RULE (CEO 2026-06-26, not to be changed): pad-start = 0 and pad-end = 0.3 for EVERY cut.**
+     (An earlier long-form run experimented with pad-end 0.35 — `'com vocês,'` end 55.68 → `'Dani'` start
+     56.00 micro-pause handling — but the CEO reasserted the absolute 0.3; **pad-end is 0.3, period; break
+     is unchanged at 0.35**.) **No `eff_end` cap, no onset trim, no silencedetect** — every hack added here
+     came back as an audible artifact. (If a value seems wrong, RAISE it to the CEO — never substitute a
+     heuristic, and never change pad-start/pad-end off the absolute 0/0.3.)
    - **Lip-sync lock:** de-silence Cam B with the **EXACT same Cam-A SOURCE transcription** (not a
      Cam-B / re-transcription) → identical frame cuts → Cam B frame-locked to Cam A. Verify
      `sync/word_sync.py` reports **offset≈0, drift≈0**.
@@ -937,7 +939,7 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
   artifacts); set `-video_track_timescale` on the container only.
 - **Pad audio per segment before concat** (`-af apad -t <vdur> -c:v copy`); frame-boundary A/V drift
   accumulates (~20 ms/segment, ~480 ms over 24 segments). `-af apad -shortest` does **NOT** fix it.
-- **DECLICK FADE at silence-cut splices — REQUIRED in FLOW 3 too (CEO 2026-06-22; folded after a real "tic noise" rejection). Same step as FLOW 2 Step 9 (L679).** One continuous Cam-A `atrim` per segment removes the *camera-switch* click (switches are video-only inside the segment), **but each silence-cut SEGMENT boundary is still a splice of two non-adjacent source samples**: Parakeet's `word.end` is conservative (the vowel sustains past the label), so the `0.35 s` pad-end frequently lands on **still-voiced, high-amplitude** audio → a non-zero-crossing step = a few-ms **tic**. Apply a **~4 ms fade-out at each segment's trailing edge** (`afade=t=out:st=<segdur−0.004>:d=0.004`) **+ ~4 ms fade-in at its leading edge** (`afade=t=in:st=0:d=0.004`), **BEFORE the per-segment `apad`** — **ONLY at silence-cut segment boundaries, NEVER at camera switches** (those rejoin the same Cam-A sample and are already seamless; fading them notches real speech). Fades ramp amplitude in place → segment durations UNCHANGED → no A/V shift. **VERIFY:** every silence-cut join ramps to a **near-zero dip** (`min|amp| → ~0` within ±6 ms of the join). *(NB: the worked-example claim that segment boundaries are "quiet" is true of the LEVEL but the pad can still be voiced — the declick is required, not optional.)*
+- **DECLICK FADE at silence-cut splices — REQUIRED in FLOW 3 too (CEO 2026-06-22; folded after a real "tic noise" rejection). Same step as FLOW 2 Step 9 (L679).** One continuous Cam-A `atrim` per segment removes the *camera-switch* click (switches are video-only inside the segment), **but each silence-cut SEGMENT boundary is still a splice of two non-adjacent source samples**: Parakeet's `word.end` is conservative (the vowel sustains past the label), so the `0.3 s` pad-end frequently lands on **still-voiced, high-amplitude** audio → a non-zero-crossing step = a few-ms **tic**. Apply a **~4 ms fade-out at each segment's trailing edge** (`afade=t=out:st=<segdur−0.004>:d=0.004`) **+ ~4 ms fade-in at its leading edge** (`afade=t=in:st=0:d=0.004`), **BEFORE the per-segment `apad`** — **ONLY at silence-cut segment boundaries, NEVER at camera switches** (those rejoin the same Cam-A sample and are already seamless; fading them notches real speech). Fades ramp amplitude in place → segment durations UNCHANGED → no A/V shift. **VERIFY:** every silence-cut join ramps to a **near-zero dip** (`min|amp| → ~0` within ±6 ms of the join). *(NB: the worked-example claim that segment boundaries are "quiet" is true of the LEVEL but the pad can still be voiced — the declick is required, not optional.)*
 - **NEVER `-c copy` concat separately-encoded HEVC clips** → **green frames** at joins (`hvc1` keeps
   SPS/PPS/VPS out-of-band, undecodable past clip 1). Use the **concat FILTER** (each input decoded with
   its own params) **or ProRes intermediates** (intra-only → every frame a keyframe → concats with
@@ -1046,9 +1048,10 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
 - **Client-side windowing of the audio before transcribing** (`WIN=30/STRIDE=25`) → dropped a word on
   the window seam (`'Certo?'`) → its 0.8 s of audio cut as "silence". POST the WHOLE file once; let the
   server VAD do the windowing. Empty span + full-level audio ⇒ HOLD, never delete or hand-patch.
-- **Silence threshold / pad too tight at 0.30** → broke segments on natural sentence-internal pauses
-  (0.32 s gap cut mid-thought) and clipped final-consonant releases. Long-form locked at **0.35 / pad
-  0.0/0.35** on raw `word.start/end`; RAISE to the CEO if a value seems off, never swap in a heuristic.
+- **Break threshold too tight at 0.30** → broke segments on natural sentence-internal pauses
+  (0.32 s gap cut mid-thought). Long-form **break locked at 0.35**. **Pad is the ABSOLUTE RULE
+  `pad-start 0 / pad-end 0.3` for every cut (CEO 2026-06-26, not to be changed)** on raw
+  `word.start/end`; RAISE to the CEO if a value seems off, never swap in a heuristic, never move pad off 0/0.3.
 - **Whisper instead of Parakeet** → hallucinated a "Gravando" loop that hid a real take. Never Whisper.
 - **Cam B de-silenced with a different / re-transcription** → **lip-sync drift** (shipped a 36 ms
   divergence once). Use the SAME Cam-A SOURCE transcription for both cameras; verify `word_sync` offset≈0.
@@ -1069,5 +1072,5 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
   source-of-truth; the ONLY VAD allowed is the STT server's internal Silero windowing inside
   `/transcribe`.
 - **No relight / fill-light, no custom `final_cut` pad/threshold values** (same CEO-removal discipline as
-  FLOW 2 — FLOW 3 long-form is LOCKED at `--pad-start 0.0 --pad-end 0.35`, break threshold `0.35`; if a
-  value seems wrong, RAISE it to the CEO, never substitute a heuristic).
+  FLOW 2 — FLOW 3 long-form is LOCKED at `--pad-start 0.0 --pad-end 0.3` (ABSOLUTE RULE, CEO 2026-06-26),
+  break threshold `0.35`; if a value seems wrong, RAISE it to the CEO, never substitute a heuristic).
