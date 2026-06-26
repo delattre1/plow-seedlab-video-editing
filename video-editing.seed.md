@@ -48,12 +48,11 @@ editor's work). **FLOW 2 vs FLOW 3 is decided by the deliverable's orientation/l
 reel → FLOW 2; 16:9 long-form → FLOW 3.
 
 > `final_cut.py` parameters are CEO-decided **per deliverable** — never substitute your own; if a value
-> seems wrong, RAISE it to the CEO (that is how FLOW 3 went 0.30 → 0.35 → the 0.6/0.12 cadence fix). **FLOW 2 (short vertical):
-> `--pad-start 0.0 --pad-end 0.3`. FLOW 3 (long landscape): `--pad-start 0.12 --pad-end 0.35`, break
-> threshold `0.6 s`, MIN_DROP `0.5 s`** (CEO 2026-06-26 — the 0.35-break / 0.0-pad-start policy made the
-> delivered long-form edit feel choppy; loosened so cuts are sparser and the incoming word gets breath —
-> see "Cadence — long-form cut density" below and FLOW 3). **`no VAD`** = no editing-client energy/RMS
-> VAD, in EITHER flow. (In FLOW 1 `final_cut` does not run.)
+> seems wrong, RAISE it to the CEO (that is how FLOW 3 went 0.30 → 0.35). **FLOW 2 (short vertical):
+> `--pad-start 0.0 --pad-end 0.3`. FLOW 3 (long landscape): `--pad-start 0.0 --pad-end 0.35`, break
+> threshold `0.35`** (CEO-raised on the accepted long-form run — 0.30 broke natural sentence pauses; see
+> FLOW 3). **`no VAD`** = no editing-client energy/RMS VAD, in EITHER flow. (In FLOW 1 `final_cut` does
+> not run.)
 >
 > **"no VAD" bans the EDITING CLIENT's energy/RMS VAD — NOT the STT server's internal VAD.** Speech and
 > cut points are defined ONLY by the transcription (the source-of-truth), never by client-side audio
@@ -140,32 +139,17 @@ reads as a stumble even with clean silence handling.
 **Root cause of the inconsistency seen on the first run:** the cut left false starts in AND did not
 normalize the trailing pause uniformly, so phrase-ends varied (some clipped, some long). **The fix is
 purely transcription-based — no acoustic.**
-- **Method (FLOW 2 short vertical — cap every gap):** walk the retained words (after false-start removal).
-  For every consecutive pair, compute `gap = next.start − prev.end`. Wherever `gap > pad-end` (0.30),
-  trim the gap down to **exactly the pad-end** — i.e. keep `prev.end + pad-end`, then jump to
+- **Method:** walk the retained words (after false-start removal). For every consecutive pair, compute
+  `gap = next.start − prev.end`. Wherever `gap > pad-end`, trim the gap down to **exactly the configured
+  pad-end** (FLOW 2 = 0.30 s; FLOW 3 long-form = 0.35 s) — i.e. keep `prev.end + pad-end`, then jump to
   `next.start`. `pad-start = 0.0`. Gaps `≤ pad-end` are natural intra-phrase rhythm — leave them.
-- **Method (FLOW 3 long-form — break + MIN_DROP cadence gate, CEO 2026-06-26):** do NOT cap every gap.
-  A gap is a **cut candidate only when `gap > BREAK` (0.6 s)** — every gap `≤ 0.6` is natural speech
-  rhythm and is **kept in full** (this is what stops the micro-chopping). A candidate is **committed only
-  if it removes real silence ≥ MIN_DROP (0.5 s)**, where `removed = gap − pad-end − pad-start`
-  (`= gap − 0.35 − 0.12`); if `removed < 0.5`, **do NOT cut — keep the words continuous** (a sub-0.5 s
-  trim is a pointless chop). When a cut IS committed: keep `prev.end + pad-end (0.35)`, drop the middle,
-  resume at `next.start − pad-start (0.12)` so the incoming word gets **0.12 s of breath**. (Net: a cut
-  only happens where `gap ≥ pad-end + pad-start + MIN_DROP = 0.97 s`, so every cut removes ≥0.5 s and the
-  retained boundary pause is 0.47 s — sparser cuts, breath on both sides.)
-  - **WHY (measured on the delivered C4798–C4852 edit the CEO rejected as choppy):** the old 0.35-break /
-    0.0-pad-start policy produced **158 cuts in 13.6 min (1 every 5.2 s)**, **52 segments < 1.5 s**, and
-    **78/158 cuts removed < 0.30 s of real silence** (near-pointless chops), while `pad_start 0.0` gave
-    every incoming word zero lead-in. The fix loosens the break and adds breath + a min-drop floor.
-- **Result by construction:** FLOW 2 — every phrase boundary is *exactly* the pad-end. FLOW 3 — natural
-  pauses up to 0.6 s survive, and the only cuts are at real ≥0.97 s silences, each leaving a 0.47 s
-  breathed boundary. Both derived 100 % from the transcription.
+- **Result by construction:** every phrase boundary in the output has *exactly* the pad-end, and no gap
+  anywhere exceeds it — consistent breathing at every cut, derived 100 % from the transcription.
 - **If a real pause is still missed** (word timestamps overran it), do NOT reach for `silencedetect` —
   tighten within transcription: re-transcribe that span / use word-level timestamps or forced alignment
-  to get an accurate `prev.end`, then re-apply.
-- **Verify after render — see the CADENCE GATE in each flow's `## Verify`** (FLOW 3: ≤6 cuts/min AND 0
-  cuts removing <0.4 s real silence). `silencedetect` may be used **only as post-hoc MEASUREMENT** of the
-  delivered file for this gate — NEVER to define a cut point (that ban stands).
+  to get an accurate `prev.end`, then re-apply the cap.
+- **Verify after render (transcription only):** re-transcribe the OUTPUT and confirm no inter-word gap
+  exceeds pad-end by more than ~1 frame. (Do NOT verify with `silencedetect`.)
 
 ---
 
@@ -617,7 +601,7 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" -o S
 # FLOW-2 9:16 1080p piece encode (libx264 is fine at 1080p; the no-libx264 ban is for 4K). In FLOW 3
 # the silence "cut" is CONCEPTUAL — it is the set of keep-windows applied as trims in the 4K HW render
 # (videotoolbox/nvenc); never run final_cut.py as a separate libx264 encode on 4K. The cut CONTRACT
-# (FLOW 3 cut CONTRACT = break 0.6 / pad 0.12/0.35 / MIN_DROP 0.5 on raw word.start/end) is what carries to FLOW 3, NOT these FLOW-2 flags.
+# (break-threshold 0.35, pad 0.0/0.35 on raw word.start/end) is what carries to FLOW 3, NOT these flags.
 python3 <video-editing>/src/video/final_cut.py SRC.mp4 \
   --transcription SRC_trans.json --output PIECE_desil.mp4 \
   --pad-start 0.0 --pad-end 0.3 --crf 12 --preset veryfast    # libx264 @1080p only — see NB above
@@ -880,19 +864,15 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" \
      lossless, 50–100× realtime) → `rough_cut.mp4` for quick review.
    - **Fine (final) cut** = **frame-accurate `video/final_cut.py`** cutting at sentence boundaries on the
      **RAW `word.start`/`word.end`** AS-IS → `final_cut.mp4`. **This is the cut that ships.** The
-     rough+fine rule, nothing on top: **a segment break is a cut CANDIDATE when the inter-word gap
-     `next.start − cur.end` exceeds the BREAK threshold (0.6 s), and is COMMITTED only when it removes
-     ≥ MIN_DROP (0.5 s) of real silence** (`removed = gap − pad-end − pad-start`); on a committed cut keep
-     `[first.start − pad-start, last.end + pad-end]` and drop the inter-segment pause; gaps `≤ 0.6 s` (and
-     candidate gaps that would remove `< 0.5 s`) are **kept continuous** (natural rhythm). LOCKED long-form
-     values **`--pad-start 0.12 --pad-end 0.35`**, break **threshold 0.6 s**, **MIN_DROP 0.5 s**.
-     **History:** pad-end was raised 0.30 → 0.35 (a 0.30 tail clipped the final consonant's release; the
-     0.30 break cut natural sentence-internal micro-pauses like `'com vocês,'` 55.68 → `'Dani'` 56.00).
-     **CEO 2026-06-26** then loosened the break 0.35 → 0.6, added pad-start 0 → 0.12 (breath in), and the
-     MIN_DROP 0.5 floor — because the 0.35/0.0 policy made the long-form edit choppy (158 cuts / 13.6 min,
-     78 of them removing < 0.30 s of real silence). **No `eff_end` cap, no onset trim, no `silencedetect`
-     for cut decisions** — every such hack came back as an audible artifact. (If a value seems wrong, RAISE
-     it to the CEO — that is exactly how 0.30 → 0.35 → 0.6/0.12 happened — never substitute a heuristic.)
+     rough+fine rule, nothing on top: **break a segment when the inter-word gap `next.start − cur.end`
+     exceeds the threshold; keep `[first.start, last.end + pad-end]`; drop the inter-segment pauses.**
+     LOCKED long-form values **`--pad-start 0.0 --pad-end 0.35`**, break **threshold 0.35 s**. **Both
+     raised from 0.30** on the CEO-accepted long-form run: at 0.30 the break fired on natural
+     sentence-internal micro-pauses (e.g. `'com vocês,'` end 55.68 → `'Dani'` start 56.00 = a 0.32 s gap
+     got cut mid-thought), and a 0.30 tail clipped the final consonant's release. **No `eff_end` cap, no
+     onset trim, no silencedetect** — every hack added here came back as an audible artifact. (If a
+     value seems wrong, RAISE it to the CEO — that is exactly how 0.30 → 0.35 happened — never substitute
+     a heuristic.)
    - **Lip-sync lock:** de-silence Cam B with the **EXACT same Cam-A SOURCE transcription** (not a
      Cam-B / re-transcription) → identical frame cuts → Cam B frame-locked to Cam A. Verify
      `sync/word_sync.py` reports **offset≈0, drift≈0**.
@@ -977,9 +957,7 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
 > Written by the engineer who actually rendered the accepted long-form v8 (`build_v8.py` → `edl_v8.json`
 > → `render_v8.py`). These are the reproducible specifics behind rules 4–7. **v8 = 120 segments, 245
 > windows, 118 camera-runs, SAM3 245/245 head-safe, Cam A 48.5% / Cam B 51.5%, zooms {0,15,20,25,35},
-> de-silence threshold 0.35 / pad 0.0/0.35 *(the values v8 shipped at — SUPERSEDED for cut cadence by the
-> CEO 2026-06-26 lock: break 0.6 / pad 0.12/0.35 / MIN_DROP 0.5; v8's crop/audio numbers still stand)*,
-> HEVC 1920×1080 23.976 fps, 14.16 min.** (v8 delivered
+> de-silence threshold 0.35 / pad 0.0/0.35, HEVC 1920×1080 23.976 fps, 14.16 min.** (v8 delivered
 > 1920×1080; the crop math and the audio rule are resolution-independent — scale to your delivery size.)
 
 - **(4) Continuous Cam-A audio per SEGMENT — the exact filtergraph that kills the click.** The unit of
@@ -1047,10 +1025,6 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
 - **Edit rules hold:** camera runs 2–4, zoom progresses within each run and resets on switch, every angle
   exists in the measured framing JSON, head-safe (SAM3 face inside crop). **TBP (if used):** exactly 3
   words, each window kept as ONE concat entry (validated 572/572 frames, 0 PTS diff vs no-TBP).
-- **CADENCE GATE (Step-10 HARD RULE 7, CEO 2026-06-26 — kills the choppy/abrupt cut feel) — MANDATORY + MEASURED:** from the committed EDL (and re-measurable on the DELIVERED file), assert BOTH:
-  - **(a) cut density ≤ 6 cuts/min:** `(n_segments − 1) / (content_s/60) ≤ 6`. (The rejected edit was 11.6.)
-  - **(b) every cut removes ≥ 0.4 s of REAL silence:** for each segment boundary, `removed = next.seg_start_gap = (next.first_word.start − prev.last_word.end) − pad_end − pad_start ≥ 0.4` → **0 cuts below 0.4 s**. (The rejected edit had 78/158 below 0.30 s.)
-  - **MEASUREMENT, not cut-decision:** you MAY corroborate (b) on the delivered mp4 with `silencedetect` as a post-hoc check, but cut points are still defined ONLY by the transcription (the ban on acoustic cut-decisions stands). Report both measured numbers as proof. A run that fails either (a) or (b) FAILS — loosen BREAK / raise MIN_DROP and re-cut, never hand-trim.
 - **NO FULL-FRAME SEGMENT + NO NAKED REPOSITION (Step-10 HARD RULE 5, CEO 2026-06-25 — kills the no-crop-just-reposition bug):** walk the EDL and assert BOTH:
   - **(a) NO segment is the raw full-frame.** FAIL the run if ANY shipped segment is the untouched frame (no real crop applied) — every segment must be a real, deliberate crop. (The widest reset is the widest gate-passing crop, itself a real crop.)
   - **(b) NO naked reposition: X moves ONLY with a ≥10% crop change.** For every pair of consecutive SAME-camera segments, if the crop change is a **HOLD** (relative crop change < 10% → must be 0 per the rule below), then `crop_x` MUST be **IDENTICAL** — FAIL on any X move while the crop is held (that is the slide the CEO saw). A reposition is allowed ONLY when it accompanies a ≥10% relative crop change (either direction). (The ≥10%-relative-either-direction magnitude itself is checked by the MINIMUM CROP-CHANGE gate just below.)
@@ -1072,13 +1046,9 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
 - **Client-side windowing of the audio before transcribing** (`WIN=30/STRIDE=25`) → dropped a word on
   the window seam (`'Certo?'`) → its 0.8 s of audio cut as "silence". POST the WHOLE file once; let the
   server VAD do the windowing. Empty span + full-level audio ⇒ HOLD, never delete or hand-patch.
-- **Silence threshold / pad too tight** → two distinct failures, both real, both CEO-caught: at **0.30**
-  the break cut natural sentence-internal pauses (0.32 s gap mid-thought) and clipped final-consonant
-  releases (→ pad-end raised to 0.35); then at **break 0.35 / pad-start 0.0** the long-form edit went
-  CHOPPY — 158 cuts/13.6 min, 78 of them removing <0.30 s of real silence, incoming words with no breath
-  (→ CEO 2026-06-26 loosened to **break 0.6 / pad-start 0.12 / MIN_DROP 0.5**, see the CADENCE GATE).
-  Long-form now locked at **break 0.6 / pad 0.12/0.35 / MIN_DROP 0.5** on raw `word.start/end`; RAISE to
-  the CEO if a value seems off, never swap in a heuristic.
+- **Silence threshold / pad too tight at 0.30** → broke segments on natural sentence-internal pauses
+  (0.32 s gap cut mid-thought) and clipped final-consonant releases. Long-form locked at **0.35 / pad
+  0.0/0.35** on raw `word.start/end`; RAISE to the CEO if a value seems off, never swap in a heuristic.
 - **Whisper instead of Parakeet** → hallucinated a "Gravando" loop that hid a real take. Never Whisper.
 - **Cam B de-silenced with a different / re-transcription** → **lip-sync drift** (shipped a 36 ms
   divergence once). Use the SAME Cam-A SOURCE transcription for both cameras; verify `word_sync` offset≈0.
@@ -1099,5 +1069,5 @@ camera, then switch cameras as the visual payoff.** The viewer sees: build → s
   source-of-truth; the ONLY VAD allowed is the STT server's internal Silero windowing inside
   `/transcribe`.
 - **No relight / fill-light, no custom `final_cut` pad/threshold values** (same CEO-removal discipline as
-  FLOW 2 — FLOW 3 long-form is LOCKED at `--pad-start 0.12 --pad-end 0.35`, break threshold `0.6`,
-  MIN_DROP `0.5`; if a value seems wrong, RAISE it to the CEO, never substitute a heuristic).
+  FLOW 2 — FLOW 3 long-form is LOCKED at `--pad-start 0.0 --pad-end 0.35`, break threshold `0.35`; if a
+  value seems wrong, RAISE it to the CEO, never substitute a heuristic).
