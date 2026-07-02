@@ -857,8 +857,7 @@ curl -s -X POST http://192.168.15.14:8101/transcribe -F "audio=@/tmp/a.wav" \
    the skew → **~26.6 s desync (≈ 2× the true offset)**. Validate two ways: (a) **objective** —
    transcribe the SAME cut window from each camera independently and confirm they yield the **same
    words** (do it early/mid/late to also rule out drift; Cam B mic is quieter → `dynaudnorm` for STT but
-   always keep Cam A audio in output); (b) **visual** — render one short side-by-side clip, eyeball
-   lips/gestures L vs R. Cam A started first ⇒ feed `-hwaccel videotoolbox -ss <off> -i camA`, Cam B
+   always keep Cam A audio in output). **NEVER validate the sign by eyeballing lips/gestures** — the sign check is the objective same-words test above, never a human visual judgement. Cam A started first ⇒ feed `-hwaccel videotoolbox -ss <off> -i camA`, Cam B
    whole. The robust engine is the `multicam-segment-matching` sync core (`word_sync.py` +
    `refine_sync.py` `BAD_CONTENT` verdict + side-by-side sync_check clips) — use it even for unscripted
    edits.
