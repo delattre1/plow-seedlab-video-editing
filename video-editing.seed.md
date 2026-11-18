@@ -12,8 +12,10 @@
 > **FIRST decide which flow you're in** — see `## Three flows — pick ONE (DECISION RULE)` directly
 > below. Everything from `## Goal` through the `## Phase-2 …` sections (Steps 0–11, Phase 2) is
 > **FLOW 2 (PROCESS → vertical 9:16 reels)**. **FLOW 1 (COMBINE)** is the self-contained section
-> above `## Goal`. **FLOW 3 (MULTICAM LONG-FORM → landscape 16:9)** is the self-contained section at
-> the very bottom of this file.
+> above `## Goal`. **FLOW 3 (MULTICAM LONG-FORM → landscape 16:9)** is the self-contained section near
+> the bottom of this file. **FLOW 4 (VO EXPLAINER: approved script + TTS voice + stills → landscape
+> 16:9)** is the self-contained section at the very bottom; it has its own Steps/Verify and its own
+> approval gate (no voice before the script is approved).
 
 ## Generativity — Step-0 gate (read before any harden spend)
 
@@ -38,10 +40,12 @@ source-of-truth for every cut**; otherwise they do different things. **Decide fi
 | **Pieces a human editor already cut** — individual hook / body / CTA clips, already vertical **1080×1920**, with B-roll / jump-cuts / on-screen text baked in | **FLOW 1 — COMBINE** | concatenate them **AS-IS** into reels. NO transcription, NO `final_cut.py`, NO SAM3. The editor's cut is preserved untouched. |
 | **Raw camera footage → a short VERTICAL reel** — one or two un-cut camera files (Cam A / Cam B), deliverable is **9:16 1080×1920** (hook/body/CTA pieces) | **FLOW 2 — PROCESS (reels)** | the per-piece vertical pipeline: Parakeet STT → `final_cut.py` silence-removal → SAM3 **vertical** reframe + centering-3 → assemble combos. |
 | **Raw camera footage → a long LANDSCAPE video** — one or two long Cam A / Cam B takes, deliverable is **16:9 3840×2160** (a full talk/episode, NOT a reel) | **FLOW 3 — MULTICAM LONG-FORM (landscape)** | the content-aware landscape pipeline: sync A/B → `/transcribe` (source-of-truth) → segment+match → rough+fine cut → framing-discovery → `multicam-edit-v2` (camera-runs + zoom arcs + **per-shot landscape crops**, audio always Cam A) → render. |
+| **No camera footage: a script to narrate with a TTS voice over still images** (frames from existing videos, screenshots, photos), deliverable is a **16:9 1920×1080 explainer** | **FLOW 4 — VO EXPLAINER** | approved script → beats (approval gate) → TTS per beat with timestamps → stills fit (never crop a head) → one clip per beat, cuts on word boundaries → FLOW 1's join → re-transcribe to verify. |
 
 **THE RULE (stated once):** *pieces already individually edited by a human → FLOW 1 (combine);
 raw camera footage you turn into a **short vertical reel** → FLOW 2 (process); raw camera footage you
-turn into a **long landscape video** → FLOW 3 (multicam long-form).* If the pieces are already
+turn into a **long landscape video** → FLOW 3 (multicam long-form); no footage, a script narrated by a
+TTS voice over stills → FLOW 4 (VO explainer).* If the pieces are already
 vertical 1080×1920 and visibly cut/B-rolled, they are editor-delivered → **FLOW 1** — do **NOT** push
 them back through SAM3/`final_cut`/Parakeet (that re-processes a finished edit and destroys the
 editor's work). **FLOW 2 vs FLOW 3 is decided by the deliverable's orientation/length:** 9:16 short
@@ -1117,3 +1121,127 @@ The framing pass (pipeline stage 5) runs many SAM3 measurements; these contracts
 - **No relight / fill-light, no custom `final_cut` pad/threshold values** (same CEO-removal discipline as
   FLOW 2 — FLOW 3 long-form is LOCKED at `--pad-start 0.0 --pad-end 0.3` (ABSOLUTE RULE, CEO 2026-06-26),
   break threshold `0.35`; if a value seems wrong, RAISE it to the CEO, never substitute a heuristic).
+
+---
+
+# FLOW 4 — VO EXPLAINER (approved script + synthetic voice + stills → one landscape 16:9 video)
+
+> Self-contained. Pick FLOW 4 when there is **no camera footage to edit**: the deliverable is a short
+> explainer narrated by a **TTS voice** over **still images** (frames grabbed from existing videos,
+> screenshots, photos). Shares the seed's finishing discipline with FLOW 1 (concat-filter + PTS reset +
+> `-bf 0`, `start_time == 0.000`, A/V locked) and its rule that **a transcription of the delivered file is
+> the proof of what is said**.
+
+## Flow-4 Goal
+An owner-approved script becomes one finished **1920×1080** explainer: each beat is spoken by the chosen
+TTS voice over the still(s) picked for that beat, picture changes land on word boundaries, the audio is
+loudness-normalized, and the file starts clean (no black first frame) with audio and video the same length.
+
+## Flow-4 Done (observable)
+- `OUT_DIR/explainer.mp4`: 1920×1080, h264 `yuv420p`, 30 fps, `has_b_frames=0`, AAC 48 kHz stereo.
+- `video start_time == audio start_time == 0.000000`; `|vdur − adur| ≤ 0.034 s` (≤ 1 frame at 30 fps).
+- Integrated loudness −16 LUFS ± 1, true peak ≤ −1 dBTP (measured on the delivered file).
+- The delivered file **re-transcribed** matches the approved script: word error rate ≤ 5% after lower-casing
+  and stripping punctuation (numbers may be spelled either way).
+- One frame from the middle of every beat was extracted and **looked at by you**: it shows the still that
+  beat calls for, and no head or face is cut off by the frame edge.
+- `OUT_DIR/manifest.json` records, per beat: the approved text, voice **name** (never a key), audio length,
+  the still(s) with source + timestamp + license, and the cut times; plus the approval record (who, when),
+  characters spent on TTS, and every Verify number. `OUT_DIR/CREDITS.txt` lists every source and its license.
+
+## Flow-4 Inputs
+| name | required | default | detect | ask |
+|---|---|---|---|---|
+| `SCRIPT` | yes | none | a `.txt`/`.md` with the narration | "Path to the narration script (or paste it). I will split it into beats for your approval." |
+| `APPROVAL` | yes | none | an approval line in the script file or in the run's instructions (who, when) | "Who approves the beat text before any voice is generated? I generate nothing until they say yes." |
+| `VOICE` | yes | none | a voice name/id the TTS account lists | "Which voice? It must be one you have the right to use. A clone of a real person needs that person's consent for this script." |
+| `TTS_KEY_FILE` | yes | `~/.config/elevenlabs/api_key` | file exists, is readable, a read-only account call with it succeeds | "Where is the TTS API key file? I read it from the file and never print, paste or log it." |
+| `STILLS` | yes | none | a list: per beat, a video path + timestamp(s), or an image path, with its license/attribution | "For each beat, which picture: a video + moment to grab, or an image file? And its license." |
+| `STT` | no | the same provider's speech-to-text with the same key | a test call on 3 s of audio | "Which speech-to-text checks the result? Default: the TTS provider's own STT." |
+| `OUT_DIR` | no | `<workdir>/out` | dir writable | "Where to deliver?" |
+
+## Flow-4 Steps
+
+### F4.0 — Interview + preflight
+Send ONE consolidated message covering every unanswered input. Then, autonomously:
+- **ffmpeg + ffprobe.** Use what is on PATH. If missing: Homebrew if present (`brew install ffmpeg`); if there
+  is no Homebrew, a **static macOS build linked from ffmpeg.org's download page** into `<workdir>/bin`
+  (no sudo, no system change), and check it runs and is signed (`codesign --verify`) before using it.
+  The build must include `libx264` or `h264_videotoolbox`, and the `loudnorm`, `ebur128` and `blackdetect`
+  filters — check, don't assume.
+- **The key file.** Read it into the request only. Never echo it, never put it on a command line others
+  can see in `ps`, never write it into the manifest, logs or chat. Prove it works with a read-only
+  account call (e.g. the subscription endpoint) and record the characters left.
+- **Budget.** Count the script's characters. If TTS would use more than 25% of what is left, stop and ask.
+
+### F4.1 — Beats (YOUR judgment) → APPROVAL GATE
+Split the script into 3–6 beats: one idea per beat, about 8–25 s spoken each, cut at sentence ends. Give
+each beat its still(s) from `STILLS`. Show the beat list (text + which picture) to the approver.
+**HARD GATE: no voice is generated before the approver says yes to this exact text.** A changed word is a
+new approval. Record the approval (who, when, the text's sha256) in the manifest. If `APPROVAL` already
+names the approver and the exact text, record it and proceed.
+
+### F4.2 — Voice per beat, with timing
+One TTS call per beat, the **with-timestamps** variant (character or word alignment), so every beat has
+its own audio file and its own alignment JSON. Same voice, model and settings for every beat. Normalize
+every beat to the same loudness target (two-pass `loudnorm`, −16 LUFS / −1.5 dBTP), 48 kHz stereo. End
+each beat on **0.3 s** of silence after its last word (the seed's pad-end rule) and start it with none.
+Record characters spent.
+
+### F4.3 — Stills
+- **From a video:** grab at full source resolution with an *accurate* seek (seek after the input, or decode
+  to the moment), and grab a few candidates around the asked moment (±1 s). **Open and look at them
+  yourself**; keep the sharpest one with no motion blur, eyes open, mouth not mid-word if possible.
+- **Never crop a head.** Fit the whole still inside 1920×1080 and fill the empty sides with a blurred,
+  darkened copy of the same still. A still below 720p height is a FAIL: find a better source.
+- Write each still as a 1920×1080 PNG; keep the source path + timestamp for the manifest and credits.
+
+### F4.4 — One clip per beat
+- Clip length = the beat's audio length, exactly (integer frame count at 30 fps; pad audio to the video,
+  never `-shortest` — that drops the last word).
+- Several stills in one beat: change picture **only at a word boundary** from F4.2's alignment, never
+  mid-word. One still: hold it for the whole beat.
+- Motion: a slow push-in of at most 5% over the clip, or none. It must be smooth: zoom an upscaled copy
+  (≥2× the output) so there is no 1-pixel jitter, then **look** at three consecutive frames to confirm.
+- Encode: 1920×1080, 30 fps, `yuv420p`, AAC 48 kHz stereo, video and audio the same frame-exact length.
+
+### F4.5 — Assemble (FLOW 1's join, unchanged)
+Join the beat clips with **FLOW 1 F1.2**: concat *filter*, `setpts=PTS-STARTPTS` / `asetpts=PTS-STARTPTS`,
+`-bf 0`, one re-encode, `+faststart`. Use 30 fps where F1.2 shows 24000/1001; same pattern otherwise.
+
+### F4.6 — Deliver
+`OUT_DIR/explainer.mp4`, `manifest.json`, `CREDITS.txt`, and the beat PNGs + per-beat audio in
+`OUT_DIR/parts/` (so one beat can be re-voiced or re-pictured later without redoing the rest). Report the
+file path, length, characters spent, and the Verify numbers. Then print `SEED_RESULT=DONE`.
+
+## Flow-4 Verify (hard gate — on the delivered file, not the parts)
+- **Start:** `start_time` of video and audio both `0.000000`.
+- **A/V lock:** `|vdur − adur| ≤ 0.034 s`.
+- **Format:** 1920×1080, 30 fps, `has_b_frames=0`, AAC 48 kHz stereo.
+- **No black frames:** `blackdetect=d=0.05:pic_th=0.98` finds nothing.
+- **Loudness:** `ebur128` on the delivered file: integrated −16 ± 1 LUFS, true peak ≤ −1 dBTP.
+- **Words:** run `STT` on the delivered file's audio; WER vs the approved text ≤ 5% (normalize case,
+  punctuation and number spelling first). Write both texts and the WER into the manifest.
+- **Pictures:** extract the middle frame of every beat; open each one and confirm it is the still that beat
+  calls for and that no head is cut off. Write what you saw per beat into the manifest.
+- **Length:** delivered duration == sum of beat clip durations ± 0.1 s.
+Any FAIL → fix the step that caused it and re-run Verify on a fresh delivery. Never edit a number into the
+manifest that you did not measure.
+
+## Flow-4 Failure modes
+- **Voice generated before approval** (or after the text changed) → wasted characters and words spoken in
+  someone's voice that they never cleared. Detect: no approval record matching the text's sha256. Fix: F4.1.
+- **Key leaked:** the key printed in a log, a command line, the manifest or a chat message. Fix: rotate the
+  key, then read it only from the file inside the request.
+- **Last word cut:** `-shortest` or a video shorter than its audio. Fix: F4.4 frame-exact length + audio pad.
+- **Picture change mid-word:** cut times not taken from the alignment. Fix: F4.4 word-boundary rule.
+- **Zoom jitter:** zooming a frame-size image with integer steps. Fix: upscale first (F4.4).
+- **Black first frame / A/V drift at joins:** `-c copy` or the concat demuxer. Fix: FLOW 1 F1.2.
+- **Cropped head or blurry upscale:** cover-crop instead of fit, or a sub-720p source. Fix: F4.3.
+- **Rights:** a still or a voice nobody cleared. Fix: only sources with a recorded license/consent in
+  `CREDITS.txt`; ask when unsure.
+
+## Flow-4 NOT in scope (do not add)
+- No music bed and no sound effects unless the owner supplies them with their license.
+- No camera-footage editing (that is FLOW 2/3), no SAM3, no silence-cutting of the voice beyond the
+  0.3 s pad-end.

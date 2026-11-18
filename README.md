@@ -14,14 +14,15 @@ copies are retired.
 
 ## Provenance
 Extracted from the hardened canonical version `plow-pbc/seedlab @ bb9fbdb`
-(`seeds/video-editing/video-editing.seed.md`, 908 lines, all 3 flows) with two CEO corrections folded in:
+(`seeds/video-editing/video-editing.seed.md`, 908 lines, flows 1-3; FLOW 4 added 2026-11-17) with two CEO corrections folded in:
 - **Gimbal / head-following is OPT-IN** — never the default, never a hard-gate (request-only).
 - **The last-3-minutes is a DEV-VALIDATION harness only** — production edits the WHOLE video.
 
-## Three flows (the seed picks one)
+## Four flows (the seed picks one)
 - **FLOW 1 — COMBINE**: concatenate human-edited pieces as-is.
 - **FLOW 2 — PROCESS (reels)**: raw footage → short vertical 9:16 reel.
 - **FLOW 3 — MULTICAM LONG-FORM**: raw footage → long landscape 16:9 video.
+- **FLOW 4 — VO EXPLAINER**: approved script + TTS voice + stills → 16:9 explainer (no voice before the script is approved).
 
 ## External dependencies (accessible, NOT run/generated here)
 - Parakeet STT API (`parakeet-tdt-0.6b-v3`) — referenced via the `STT_URL` input.
