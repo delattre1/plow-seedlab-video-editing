@@ -1157,7 +1157,7 @@ loudness-normalized, and the file starts clean (no black first frame) with audio
 | `VOICE` | yes | none | a voice name/id the TTS account lists | "Which voice? It must be one you have the right to use. A clone of a real person needs that person's consent for this script." |
 | `TTS_KEY_FILE` | yes | `~/.config/elevenlabs/api_key` | file exists, is readable, a read-only account call with it succeeds | "Where is the TTS API key file? I read it from the file and never print, paste or log it." |
 | `STILLS` | yes | none | a list: per beat, a video path + timestamp(s), or an image path, with its license/attribution | "For each beat, which picture: a video + moment to grab, or an image file? And its license." |
-| `STT` | no | the same provider's speech-to-text with the same key | a test call on 3 s of audio | "Which speech-to-text checks the result? Default: the TTS provider's own STT." |
+| `STT` | no | the same provider's speech-to-text with the same key | a test call on 3 s of audio | "Which speech-to-text checks the result? Default: the TTS provider's own STT; add an independent one (another vendor) when you can reach it." |
 | `OUT_DIR` | no | `<workdir>/out` | dir writable | "Where to deliver?" |
 
 ## Flow-4 Steps
@@ -1166,7 +1166,11 @@ loudness-normalized, and the file starts clean (no black first frame) with audio
 Send ONE consolidated message covering every unanswered input. Then, autonomously:
 - **ffmpeg + ffprobe.** Use what is on PATH. If missing: Homebrew if present (`brew install ffmpeg`); if there
   is no Homebrew, a **static macOS build linked from ffmpeg.org's download page** into `<workdir>/bin`
-  (no sudo, no system change), and check it runs and is signed (`codesign --verify`) before using it.
+  (no sudo, no system change), and verify it before using it: `codesign --verify` if it is codesigned;
+  the builds ffmpeg.org links for macOS are often NOT codesigned, so then verify the builder's own
+  published signature (e.g. its OpenPGP `.sig` against the builder's key fetched from two independent
+  places). Never sign a binary yourself to make a check pass. An Intel-only build needs Rosetta on Apple
+  Silicon: check `arch -x86_64 /usr/bin/true` first, and prefer a native arm64 build when one is offered.
   The build must include `libx264` or `h264_videotoolbox`, and the `loudnorm`, `ebur128` and `blackdetect`
   filters — check, don't assume.
 - **The key file.** Read it into the request only. Never echo it, never put it on a command line others
@@ -1175,7 +1179,8 @@ Send ONE consolidated message covering every unanswered input. Then, autonomousl
 - **Budget.** Count the script's characters. If TTS would use more than 25% of what is left, stop and ask.
 
 ### F4.1 — Beats (YOUR judgment) → APPROVAL GATE
-Split the script into 3–6 beats: one idea per beat, about 8–25 s spoken each, cut at sentence ends. Give
+Split the script into 3–6 beats: one idea per beat, about 8–25 s spoken each (a short script may give
+5–8 s beats; 3 beats is still the minimum), cut at sentence ends. Give
 each beat its still(s) from `STILLS`. Show the beat list (text + which picture) to the approver.
 **HARD GATE: no voice is generated before the approver says yes to this exact text.** A changed word is a
 new approval. Record the approval (who, when, the text's sha256) in the manifest. If `APPROVAL` already
@@ -1221,7 +1226,11 @@ file path, length, characters spent, and the Verify numbers. Then print `SEED_RE
 - **No black frames:** `blackdetect=d=0.05:pic_th=0.98` finds nothing.
 - **Loudness:** `ebur128` on the delivered file: integrated −16 ± 1 LUFS, true peak ≤ −1 dBTP.
 - **Words:** run `STT` on the delivered file's audio; WER vs the approved text ≤ 5% (normalize case,
-  punctuation and number spelling first). Write both texts and the WER into the manifest.
+  punctuation and number spelling first). Write both texts and the WER into the manifest. An STT from
+  the **same vendor as the TTS** can hear what the voice was asked to say rather than what it said: when
+  an independent STT (another vendor/model) is reachable, run it too. Where the two disagree on a word,
+  list each disputed word with its timestamp in the manifest and the report, so a person listens there;
+  never average the disagreement away.
 - **Pictures:** extract the middle frame of every beat; open each one and confirm it is the still that beat
   calls for and that no head is cut off. Write what you saw per beat into the manifest.
 - **Length:** delivered duration == sum of beat clip durations ± 0.1 s.
