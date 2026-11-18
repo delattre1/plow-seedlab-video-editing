@@ -1154,7 +1154,7 @@ loudness-normalized, and the file starts clean (no black first frame) with audio
 |---|---|---|---|---|
 | `SCRIPT` | yes | none | a `.txt`/`.md` with the narration | "Path to the narration script (or paste it). I will split it into beats for your approval." |
 | `APPROVAL` | yes | none | an approval line in the script file or in the run's instructions (who, when) | "Who approves the beat text before any voice is generated? I generate nothing until they say yes." |
-| `VOICE` | yes | none | a voice name/id the TTS account lists | "Which voice? It must be one you have the right to use. A clone of a real person needs that person's consent for this script." |
+| `VOICE` | yes | none | a voice name/id the TTS account lists | "Which voice? It must be one you have the right to use. A clone of a real person needs that person's own yes on this exact script." |
 | `TTS_KEY_FILE` | yes | `~/.config/elevenlabs/api_key` | file exists, is readable, a read-only account call with it succeeds | "Where is the TTS API key file? I read it from the file and never print, paste or log it." |
 | `STILLS` | yes | none | a list: per beat, a video path + timestamp(s), or an image path, with its license/attribution | "For each beat, which picture: a video + moment to grab, or an image file? And its license." |
 | `STT` | no | the same provider's speech-to-text with the same key | a test call on 3 s of audio | "Which speech-to-text checks the result? Default: the TTS provider's own STT; add an independent one (another vendor) when you can reach it." |
@@ -1185,10 +1185,11 @@ each beat its still(s) from `STILLS`. Show the beat list (text + which picture) 
 **HARD GATE: no voice is generated before the approver says yes to this exact text.** A changed word is a
 new approval. Record the approval (who, when, the text's sha256) in the manifest. If `APPROVAL` already
 names the approver and the exact text, record it and proceed.
-**Cloned voice of a real person = speech in that person's name:** the voice's owner (or the delegate they
-named) must ALSO say yes to the exact text, separately from the project owner. Two approvals, both recorded
-side by side; generate nothing in that voice until both are in. Drafting and previewing with a stock voice
-is fine meanwhile.
+**Cloned voice of a real person = speech in that person's name:** that person must ALSO say yes to the
+exact text, **personally**, separately from the project owner. An agent may carry the text to them and record
+their yes, but an agent's yes never stands in for theirs. Two approvals, both recorded side by side (who,
+when, text sha256, and who relayed it); generate nothing in that voice until both are in. Drafting and
+previewing with a stock voice is fine meanwhile.
 
 ### F4.2 — Voice per beat, with timing
 One TTS call per beat, the **with-timestamps** variant (character or word alignment), so every beat has
