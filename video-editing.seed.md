@@ -1185,6 +1185,10 @@ each beat its still(s) from `STILLS`. Show the beat list (text + which picture) 
 **HARD GATE: no voice is generated before the approver says yes to this exact text.** A changed word is a
 new approval. Record the approval (who, when, the text's sha256) in the manifest. If `APPROVAL` already
 names the approver and the exact text, record it and proceed.
+**Cloned voice of a real person = speech in that person's name:** the voice's owner (or the delegate they
+named) must ALSO say yes to the exact text, separately from the project owner. Two approvals, both recorded
+side by side; generate nothing in that voice until both are in. Drafting and previewing with a stock voice
+is fine meanwhile.
 
 ### F4.2 — Voice per beat, with timing
 One TTS call per beat, the **with-timestamps** variant (character or word alignment), so every beat has
